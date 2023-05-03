@@ -95,6 +95,13 @@ COMMON_DBS = ['dogs', 'postgres', 'dogs_nofunc', 'dogs_noschema', DB_NAME]
 requires_static_version = pytest.mark.skipif(USING_LATEST, reason='Version `latest` is ever-changing, skipping')
 
 
+def _iterate_metric_name(query):
+    for column in query['columns']:
+        if column['type'].startswith('tag'):
+            continue
+        yield column['name']
+
+
 def assert_metric_at_least(aggregator, metric_name, lower_bound=None, higher_bound=None, count=None, tags=None):
     found_values = 0
     expected_tags = normalize_tags(tags, sort=True)
@@ -134,8 +141,18 @@ def check_common_metrics(aggregator, expected_tags, count=1):
 
 
 def check_db_count(aggregator, expected_tags, count=1):
+    table_count = 5
+    # We create 2 additional partition tables when partition is available
+    if float(POSTGRES_VERSION) >= 11.0:
+        table_count = 7
+    # And PG >= 14 will also report the parent table
+    if float(POSTGRES_VERSION) >= 14.0:
+        table_count = 8
     aggregator.assert_metric(
-        'postgresql.table.count', value=5, count=count, tags=expected_tags + ['db:{}'.format(DB_NAME), 'schema:public']
+        'postgresql.table.count',
+        value=table_count,
+        count=count,
+        tags=expected_tags + ['db:{}'.format(DB_NAME), 'schema:public'],
     )
     aggregator.assert_metric('postgresql.db.count', value=106, count=1)
 
